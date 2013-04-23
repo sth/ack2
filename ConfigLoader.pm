@@ -6,7 +6,7 @@ use warnings;
 use App::Ack ();
 use App::Ack::Filter;
 use App::Ack::Filter::Default;
-use Carp 1.04 ();
+use Carp ();
 use Getopt::Long 2.35 ();
 use Text::ParseWords 3.1 ();
 

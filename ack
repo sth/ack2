@@ -22,7 +22,7 @@ use App::Ack::Filter::Match;
 
 use Getopt::Long 2.35 ();
 
-use Carp 1.04 ();
+use Carp ();
 
 our $VERSION = '2.0301';
 # Check http://beyondgrep.com/ for updates

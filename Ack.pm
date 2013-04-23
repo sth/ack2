@@ -46,8 +46,8 @@ our $dir_sep_chars;
 our $is_cygwin;
 our $is_windows;
 
-use File::Spec 1.00015 ();
-use File::Glob 1.00015 ':glob';
+use File::Spec ();
+use File::Glob ':glob';
 
 BEGIN {
     # These have to be checked before any filehandle diddling.

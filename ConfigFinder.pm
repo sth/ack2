@@ -37,8 +37,8 @@ use strict;
 use warnings;
 
 use App::Ack ();
-use Cwd 3.00 ();
-use File::Spec 3.00;
+use Cwd ();
+use File::Spec;
 
 BEGIN {
     if ($App::Ack::is_windows) {
