@@ -3,7 +3,7 @@
 use strict;
 use warnings;
 
-use Test::More tests => 5;
+use Test::More;
 
 use lib 't';
 use Util;
@@ -12,6 +12,12 @@ use App::Ack;
 use Cwd qw( realpath getcwd );
 use File::Spec ();
 use File::Temp ();
+
+unless ( File::Temp->can('newdir') ) {
+    plan skip_all => q{You need File::Temp->newdir to be able to run this test};
+}
+
+plan tests => 5;
 
 sub is_global_file {
     my ( $filename ) = @_;

@@ -14,6 +14,10 @@ use Test::More;
 
 use App::Ack::ConfigFinder;
 
+unless ( File::Temp->can('newdir') ) {
+    plan skip_all => q{You need File::Temp->newdir to be able to run this test};
+}
+
 my $tmpdir = $ENV{'TMPDIR'};
 my $home   = $ENV{'HOME'};
 

@@ -10,6 +10,10 @@ use Util;
 
 plan skip_all => q{Don't yet have a reliable way to ignore the Unicode complaints from Pod::Perldoc};
 
+unless ( File::Temp->can('newdir') ) {
+    plan skip_all => q{You need File::Temp->newdir to be able to run this test};
+}
+
 my @types = (
     perl   => [qw{.pl .pod .pl .t}],
     python => [qw{.py}],

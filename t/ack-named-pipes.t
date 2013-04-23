@@ -32,6 +32,11 @@ unless ( has_mkfifo() ) {
     plan skip_all => q{You need the 'mkfifo' command to be able to run this test};
 }
 
+unless ( File::Temp->can('newdir') ) {
+    plan skip_all => q{You need File::Temp->newdir to be able to run this test};
+}
+
+
 plan tests => 2;
 
 local $SIG{'ALRM'} = sub {
