@@ -37,4 +37,12 @@ sub inspect {
     return "!$filter";
 }
 
+sub to_string {
+    my ( $self ) = @_;
+
+    my $filter = $self->{'filter'};
+
+    return "!$filter";
+}
+
 1;
