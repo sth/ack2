@@ -360,14 +360,44 @@ my $match_column_number;
 
 {
 
-my @before_ctx_lines;
-my @after_ctx_lines;
+my $n_before_ctx_lines;
+my $n_after_ctx_lines;
+my $is_tracking_context;
+my @before_context_buf;
+my $before_context_pos;
+my $printed_line_no;
+my $after_context_pending;
+
 my $is_iterating;
 
+my $is_first_match;
 my $has_printed_something;
 
 BEGIN {
     $has_printed_something = 0;
+}
+
+sub setup_line_context {
+    my ( $opt ) = @_;
+
+    $n_before_ctx_lines = $opt->{output} ? 0 : ($opt->{before_context} || 0);
+    $n_after_ctx_lines  = $opt->{output} ? 0 : ($opt->{after_context} || 0);
+    @before_context_buf = (undef) x $n_before_ctx_lines;
+    $before_context_pos = 0;
+
+    $is_tracking_context = $n_before_ctx_lines || $n_after_ctx_lines;
+
+    $is_first_match = 1;
+}
+
+sub setup_line_context_for_file {
+    my ( $opt ) = @_;
+
+    $printed_line_no = 0;
+    $after_context_pending = 0;
+    if( $opt->{'heading'} && !$opt->{'lines'} ) {
+        $is_first_match = 1;
+    }
 }
 
 =for Developers
@@ -396,16 +426,6 @@ sub print_matches_in_resource {
 
     $is_iterating = 1;
 
-    # XXX can this be lifted out to the caller?
-    local $opt_before_context = $opt_output ? 0 : $opt_before_context;
-    local $opt_after_context  = $opt_output ? 0 : $opt_after_context;
-
-    my $n_before_ctx_lines = $opt_before_context || 0;
-    my $n_after_ctx_lines  = $opt_after_context  || 0;
-
-    # XXX avoid option-specific work like this
-    @after_ctx_lines = @before_ctx_lines = ();
-
     my $fh = $resource->open();
     if ( !$fh ) {
         if ( $App::Ack::report_bad_filenames ) {
@@ -421,19 +441,11 @@ sub print_matches_in_resource {
 
     # check for context before the main loop, so we don't
     # pay for it if we don't need it
-    if ( $n_before_ctx_lines || $n_after_ctx_lines ) {
-        my $current_line = <$fh>; # prime the first line of input
-
-        while ( defined $current_line ) {
-            while ( (@after_ctx_lines < $n_after_ctx_lines) && defined($_ = <$fh>) ) {
-                push @after_ctx_lines, $_;
-            }
-
-            local $_ = $current_line;
-            my $former_dot_period = $.;
-            $. -= @after_ctx_lines;
-
-            if ( does_match($opt, $_) ) {
+    if ( $is_tracking_context ) {
+        $before_context_pos = 0;
+        $after_context_pending = 0;
+        while (<$fh>) {
+            if ( does_match($opt, $_) && $max_count ) {
                 if ( !$has_printed_for_this_resource ) {
                     if ( $opt_break && $has_printed_something ) {
                         App::Ack::print_blank_line();
@@ -456,25 +468,17 @@ sub print_matches_in_resource {
                 print_line_with_options($opt, $filename, $_, $., ':');
                 $has_printed_for_this_resource = 1;
             }
-            last unless $max_count != 0;
-
-            # I tried doing this with local(), but for some reason,
-            # $. continued to have its new value after the exit of the
-            # enclosing block.  I'm guessing that $. has some extra
-            # magic associated with it or something.  If someone can
-            # tell me why this happened, I would love to know!
-            $. = $former_dot_period; # XXX this won't happen on an exception
-
-            if ( $n_before_ctx_lines ) {
-                push @before_ctx_lines, $current_line;
-                shift @before_ctx_lines while @before_ctx_lines > $n_before_ctx_lines;
-            }
-            if ( $n_after_ctx_lines ) {
-                $current_line = shift @after_ctx_lines;
-            }
+            #elsif ($after_context_pending) {
+            #    chomp;
+            #    print_line_with_options($opt, $filename, $_, $., '-');
+            #    $after_context_pending--;
+            #}
             else {
-                $current_line = <$fh>;
+                chomp;
+                print_line_if_context($opt, $filename, $_, $., ':');
             }
+
+            last unless $max_count || $after_context_pending;
         }
     }
     else {
@@ -606,6 +610,7 @@ sub print_line_with_options {
     my ( $opt, $filename, $line, $line_no, $separator ) = @_;
 
     $has_printed_something = 1;
+    $printed_line_no = $line_no;
 
     my $ors = $opt_print0 ? "\0" : "\n";
 
@@ -706,14 +711,6 @@ sub iterate {
 
     $is_iterating = 1;
 
-    local $opt_before_context = $opt_output ? 0 : $opt_before_context;
-    local $opt_after_context  = $opt_output ? 0 : $opt_after_context;
-
-    my $n_before_ctx_lines = $opt_before_context || 0;
-    my $n_after_ctx_lines  = $opt_after_context  || 0;
-
-    @after_ctx_lines = @before_ctx_lines = ();
-
     my $fh = $resource->open();
     if ( !$fh ) {
         if ( $App::Ack::report_bad_filenames ) {
@@ -723,37 +720,12 @@ sub iterate {
     }
 
     # Check for context before the main loop, so we don't pay for it if we don't need it.
-    if ( $n_before_ctx_lines || $n_after_ctx_lines ) {
-        my $current_line = <$fh>; # prime the first line of input
+    if ( $is_tracking_context ) {
+        $before_context_pos = 0;
+        $after_context_pending = 0;
 
-        while ( defined $current_line ) {
-            while ( (@after_ctx_lines < $n_after_ctx_lines) && defined($_ = <$fh>) ) {
-                push @after_ctx_lines, $_;
-            }
-
-            local $_ = $current_line;
-            my $former_dot_period = $.;
-            $. -= @after_ctx_lines;
-
+        while ( <$fh> ) {
             last unless $cb->();
-
-            # I tried doing this with local(), but for some reason,
-            # $. continued to have its new value after the exit of the
-            # enclosing block.  I'm guessing that $. has some extra
-            # magic associated with it or something.  If someone can
-            # tell me why this happened, I would love to know!
-            $. = $former_dot_period; # XXX this won't happen on an exception
-
-            if ( $n_before_ctx_lines ) {
-                push @before_ctx_lines, $current_line;
-                shift @before_ctx_lines while @before_ctx_lines > $n_before_ctx_lines;
-            }
-            if ( $n_after_ctx_lines ) {
-                $current_line = shift @after_ctx_lines;
-            }
-            else {
-                $current_line = <$fh>;
-            }
         }
     }
     else {
@@ -771,114 +743,57 @@ sub iterate {
     return;
 }
 
-sub get_context {
-    if ( not $is_iterating ) {
-        Carp::croak( 'get_context() called outside of iterate()' );
-    }
-
-    return (
-        scalar(@before_ctx_lines) ? \@before_ctx_lines : undef,
-        scalar(@after_ctx_lines)  ? \@after_ctx_lines  : undef,
-    );
-}
-
-}
-
-{
-
-my $is_first_match;
-my $previous_file_processed;
-my $previous_line_printed;
-
-BEGIN {
-    $is_first_match        = 1;
-    $previous_line_printed = -1;
-}
-
 sub print_line_with_context {
     my ( $opt, $filename, $matching_line, $line_no ) = @_;
 
-    if( !defined($previous_file_processed) ||
-      $previous_file_processed ne $filename ) {
-        $previous_file_processed = $filename;
-        $previous_line_printed   = -1;
-
-        if( $opt_heading ) {
-            $is_first_match = 1;
-        }
-    }
-
     my $ors                 = $opt_print0 ? "\0" : "\n";
-    my $match_word          = $opt->{w};
-    my $is_tracking_context = $opt_after_context || $opt_before_context;
 
     $matching_line =~ s/[\r\n]+$//g;
 
-    my ( $before_context, $after_context ) = get_context();
-
-    if ( $before_context ) {
-        my $first_line = $. - @{$before_context};
-
-        if ( $first_line <= $previous_line_printed ) {
-            splice @{$before_context}, 0, $previous_line_printed - $first_line + 1;
-            $first_line = $. - @{$before_context};
-        }
-        if ( @{$before_context} ) {
-            my $offset = @{$before_context};
-
-            if( !$is_first_match && $previous_line_printed != $first_line - 1 ) {
-                App::Ack::print('--', $ors);
-            }
-            foreach my $line (@{$before_context}) {
-                my $context_line_no = $. - $offset;
-                if ( $context_line_no <= $previous_line_printed ) {
-                    next;
-                }
-
-                chomp $line;
-                local $opt_column;
-
-                print_line_with_options($opt, $filename, $line, $context_line_no, '-');
-                $previous_line_printed = $context_line_no;
-                $offset--;
-            }
-        }
-    }
-
-    if ( $. > $previous_line_printed ) {
-        if( $is_tracking_context && !$is_first_match && $previous_line_printed != $. - 1 ) {
+    if( $is_tracking_context ) {
+        my $before_unprinted = $line_no - $printed_line_no - 1;
+        if (!$is_first_match && ( !$printed_line_no || ( $before_unprinted > $n_before_ctx_lines )) ) {
             App::Ack::print('--', $ors);
         }
 
-        print_line_with_options($opt, $filename, $matching_line, $line_no, ':');
-        $previous_line_printed = $.;
-    }
+        if ($before_unprinted > $n_before_ctx_lines) {
+            $before_unprinted = $n_before_ctx_lines;
+        }
 
-    if($after_context) {
-        my $offset = 1;
-        foreach my $line (@{$after_context}) {
-            # XXX improve this!
-            if ( $previous_line_printed >= $. + $offset ) {
-                $offset++;
-                next;
-            }
+        while ($before_unprinted > 0) {
+            my $line = $before_context_buf[($before_context_pos-$before_unprinted + $n_before_ctx_lines) % $n_before_ctx_lines];
+
             chomp $line;
+            local $opt_column;
 
-            if ( $opt_regex && does_match( $opt, $line ) ) {
-                print_line_with_options($opt, $filename, $line, $. + $offset, ':');
-            }
-            else {
-                local $opt_column;
-                print_line_with_options($opt, $filename, $line, $. + $offset, '-');
-            }
-            $previous_line_printed = $. + $offset;
-            $offset++;
+            print_line_with_options($opt, $filename, $line, $line_no-$before_unprinted, '-');
+            $before_unprinted--;
         }
     }
+
+    print_line_with_options($opt, $filename, $matching_line, $line_no, ':');
+
+    $after_context_pending = $n_after_ctx_lines;
 
     $is_first_match = 0;
 
     return;
+}
+
+sub print_line_if_context {
+    #my ( $opt, $filename, $line, $line_no, $separator ) = @_;
+
+    if ($after_context_pending) {
+        print_line_with_options(@_);
+        --$after_context_pending;
+    }
+    else {
+        if ($n_before_ctx_lines) {
+            # save line for before context
+            $before_context_buf[$before_context_pos] = $_;
+            $before_context_pos = ($before_context_pos+1) % $n_before_ctx_lines;
+        }
+    }
 }
 
 }
@@ -1087,8 +1002,13 @@ sub main {
 
     my $nmatches    = 0;
     my $total_count = 0;
+
+    setup_line_context($opt);
+
 RESOURCES:
     while ( my $resource = $resources->next ) {
+        setup_line_context_for_file($opt);
+
         # XXX Combine the -f and -g functions
         if ( $opt_f ) {
             # XXX printing should probably happen inside of App::Ack
@@ -1139,6 +1059,9 @@ RESOURCES:
                 }
                 elsif ( $opt_passthru ) {
                     print_line_with_options($opt, $filename, $_, $., ':');
+                }
+                else {
+                    print_line_if_context($opt, $filename, $_, $., '-');
                 }
                 return 1;
             });
