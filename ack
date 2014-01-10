@@ -388,6 +388,8 @@ sub setup_line_context {
     $is_tracking_context = $n_before_ctx_lines || $n_after_ctx_lines;
 
     $is_first_match = 1;
+
+    return;
 }
 
 sub setup_line_context_for_file {
@@ -398,6 +400,8 @@ sub setup_line_context_for_file {
     if( $opt->{'heading'} && !$opt->{'lines'} ) {
         $is_first_match = 1;
     }
+
+    return;
 }
 
 =for Developers
@@ -475,7 +479,7 @@ sub print_matches_in_resource {
             #}
             else {
                 chomp;
-                print_line_if_context($opt, $filename, $_, $., ':');
+                print_line_if_context($opt, $filename, $_, $., '-');
             }
 
             last unless $max_count || $after_context_pending;
@@ -756,6 +760,7 @@ sub print_line_with_context {
             App::Ack::print('--', $ors);
         }
 
+        # We want at most $n_before_ctx_lines of context
         if ($before_unprinted > $n_before_ctx_lines) {
             $before_unprinted = $n_before_ctx_lines;
         }
@@ -764,6 +769,8 @@ sub print_line_with_context {
             my $line = $before_context_buf[($before_context_pos-$before_unprinted + $n_before_ctx_lines) % $n_before_ctx_lines];
 
             chomp $line;
+
+            # Disable $opt->{columns} since there are no matches in the context lines
             local $opt_column;
 
             print_line_with_options($opt, $filename, $line, $line_no-$before_unprinted, '-');
@@ -773,6 +780,7 @@ sub print_line_with_context {
 
     print_line_with_options($opt, $filename, $matching_line, $line_no, ':');
 
+    # We want to get the next $n_after_ctx_lines printed
     $after_context_pending = $n_after_ctx_lines;
 
     $is_first_match = 0;
@@ -781,9 +789,11 @@ sub print_line_with_context {
 }
 
 sub print_line_if_context {
-    #my ( $opt, $filename, $line, $line_no, $separator ) = @_;
+    my ( $opt, $filename, $line, $line_no, $separator ) = @_;
 
     if ($after_context_pending) {
+        # Disable $opt->{columns} since there are no matches in the context lines
+        local $opt->{column} = 0;
         print_line_with_options(@_);
         --$after_context_pending;
     }
@@ -794,6 +804,8 @@ sub print_line_if_context {
             $before_context_pos = ($before_context_pos+1) % $n_before_ctx_lines;
         }
     }
+
+    return;
 }
 
 }
