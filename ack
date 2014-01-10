@@ -446,7 +446,6 @@ sub print_matches_in_resource {
     # check for context before the main loop, so we don't
     # pay for it if we don't need it
     if ( $is_tracking_context ) {
-        $before_context_pos = 0;
         $after_context_pending = 0;
         while (<$fh>) {
             if ( does_match($opt, $_) && $max_count ) {
@@ -472,13 +471,8 @@ sub print_matches_in_resource {
                 print_line_with_options($opt, $filename, $_, $., ':');
                 $has_printed_for_this_resource = 1;
             }
-            #elsif ($after_context_pending) {
-            #    chomp;
-            #    print_line_with_options($opt, $filename, $_, $., '-');
-            #    $after_context_pending--;
-            #}
             else {
-                chomp;
+                chomp; # XXX proper newline handling?
                 print_line_if_context($opt, $filename, $_, $., '-');
             }
 
@@ -725,7 +719,6 @@ sub iterate {
 
     # Check for context before the main loop, so we don't pay for it if we don't need it.
     if ( $is_tracking_context ) {
-        $before_context_pos = 0;
         $after_context_pending = 0;
 
         while ( <$fh> ) {
@@ -754,6 +747,7 @@ sub print_line_with_context {
 
     $matching_line =~ s/[\r\n]+$//g;
 
+    # check if we need to print context lines first
     if( $is_tracking_context ) {
         my $before_unprinted = $line_no - $printed_line_no - 1;
         if (!$is_first_match && ( !$printed_line_no || ( $before_unprinted > $n_before_ctx_lines )) ) {
@@ -788,6 +782,7 @@ sub print_line_with_context {
     return;
 }
 
+# print the line only if it's part of a context we need to display
 sub print_line_if_context {
     my ( $opt, $filename, $line, $line_no, $separator ) = @_;
 
@@ -799,7 +794,7 @@ sub print_line_if_context {
     }
     else {
         if ($n_before_ctx_lines) {
-            # save line for before context
+            # save line for "before" context
             $before_context_buf[$before_context_pos] = $_;
             $before_context_pos = ($before_context_pos+1) % $n_before_ctx_lines;
         }
