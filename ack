@@ -789,15 +789,13 @@ sub print_line_if_context {
     if ($after_context_pending) {
         # Disable $opt->{columns} since there are no matches in the context lines
         local $opt->{column} = 0;
-        print_line_with_options(@_);
+        print_line_with_options($opt, $filename, $line, $line_no, $separator);
         --$after_context_pending;
     }
-    else {
-        if ($n_before_ctx_lines) {
-            # save line for "before" context
-            $before_context_buf[$before_context_pos] = $_;
-            $before_context_pos = ($before_context_pos+1) % $n_before_ctx_lines;
-        }
+    elsif ($n_before_ctx_lines) {
+        # save line for "before" context
+        $before_context_buf[$before_context_pos] = $_;
+        $before_context_pos = ($before_context_pos+1) % $n_before_ctx_lines;
     }
 
     return;
