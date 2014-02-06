@@ -764,7 +764,7 @@ sub print_line_with_context {
 
             chomp $line;
 
-            # Disable $opt->{columns} since there are no matches in the context lines
+            # Disable $opt->{column} since there are no matches in the context lines
             local $opt_column;
 
             print_line_with_options($opt, $filename, $line, $line_no-$before_unprinted, '-');
@@ -787,7 +787,7 @@ sub print_line_if_context {
     my ( $opt, $filename, $line, $line_no, $separator ) = @_;
 
     if ($after_context_pending) {
-        # Disable $opt->{columns} since there are no matches in the context lines
+        # Disable $opt->{column} since there are no matches in the context lines
         local $opt->{column} = 0;
         print_line_with_options($opt, $filename, $line, $line_no, $separator);
         --$after_context_pending;
