@@ -360,13 +360,23 @@ my $match_column_number;
 
 {
 
+# flag if we need any context tracking
+my $is_tracking_context;
+
+# number of context lines
 my $n_before_ctx_lines;
 my $n_after_ctx_lines;
-my $is_tracking_context;
+
+# array to keep track of lines that might be required for a "before" context
 my @before_context_buf;
+# position to insert next line in @before_context_buf
 my $before_context_pos;
-my $printed_line_no;
+
+# number of "after" context lines still pending
 my $after_context_pending;
+
+# number of latest line that got printed
+my $printed_line_no;
 
 my $is_iterating;
 
@@ -377,11 +387,12 @@ BEGIN {
     $has_printed_something = 0;
 }
 
+# setup context tracking variables
 sub setup_line_context {
-    my ( $opt ) = @_;
 
-    $n_before_ctx_lines = $opt->{output} ? 0 : ($opt->{before_context} || 0);
-    $n_after_ctx_lines  = $opt->{output} ? 0 : ($opt->{after_context} || 0);
+    $n_before_ctx_lines = $opt_output ? 0 : ($opt_before_context || 0);
+    $n_after_ctx_lines  = $opt_output ? 0 : ($opt_after_context || 0);
+
     @before_context_buf = (undef) x $n_before_ctx_lines;
     $before_context_pos = 0;
 
@@ -392,12 +403,12 @@ sub setup_line_context {
     return;
 }
 
+# adjust context tracking variables when entering a new file
 sub setup_line_context_for_file {
-    my ( $opt ) = @_;
 
     $printed_line_no = 0;
     $after_context_pending = 0;
-    if( $opt->{'heading'} && !$opt->{'lines'} ) {
+    if ( $opt_heading && !$opt_lines ) {
         $is_first_match = 1;
     }
 
@@ -447,7 +458,7 @@ sub print_matches_in_resource {
     # pay for it if we don't need it
     if ( $is_tracking_context ) {
         $after_context_pending = 0;
-        while (<$fh>) {
+        while ( <$fh> ) {
             if ( does_match($opt, $_) && $max_count ) {
                 if ( !$has_printed_for_this_resource ) {
                     if ( $opt_break && $has_printed_something ) {
@@ -476,7 +487,7 @@ sub print_matches_in_resource {
                 print_line_if_context($opt, $filename, $_, $., '-');
             }
 
-            last unless $max_count || $after_context_pending;
+            last if ($max_count == 0) && ($after_context_pending == 0);
         }
     }
     else {
@@ -750,22 +761,22 @@ sub print_line_with_context {
     # check if we need to print context lines first
     if( $is_tracking_context ) {
         my $before_unprinted = $line_no - $printed_line_no - 1;
-        if (!$is_first_match && ( !$printed_line_no || ( $before_unprinted > $n_before_ctx_lines )) ) {
+        if ( !$is_first_match && ( !$printed_line_no || $before_unprinted > $n_before_ctx_lines ) ) {
             App::Ack::print('--', $ors);
         }
 
         # We want at most $n_before_ctx_lines of context
-        if ($before_unprinted > $n_before_ctx_lines) {
+        if ( $before_unprinted > $n_before_ctx_lines ) {
             $before_unprinted = $n_before_ctx_lines;
         }
 
-        while ($before_unprinted > 0) {
-            my $line = $before_context_buf[($before_context_pos-$before_unprinted + $n_before_ctx_lines) % $n_before_ctx_lines];
+        while ( $before_unprinted > 0 ) {
+            my $line = $before_context_buf[($before_context_pos - $before_unprinted + $n_before_ctx_lines) % $n_before_ctx_lines];
 
             chomp $line;
 
             # Disable $opt->{column} since there are no matches in the context lines
-            local $opt_column;
+            local $opt_column = 0;
 
             print_line_with_options($opt, $filename, $line, $line_no-$before_unprinted, '-');
             $before_unprinted--;
@@ -786,13 +797,13 @@ sub print_line_with_context {
 sub print_line_if_context {
     my ( $opt, $filename, $line, $line_no, $separator ) = @_;
 
-    if ($after_context_pending) {
+    if ( $after_context_pending ) {
         # Disable $opt->{column} since there are no matches in the context lines
-        local $opt->{column} = 0;
-        print_line_with_options($opt, $filename, $line, $line_no, $separator);
+        local $opt_column = 0;
+        print_line_with_options( $opt, $filename, $line, $line_no, $separator );
         --$after_context_pending;
     }
-    elsif ($n_before_ctx_lines) {
+    elsif ( $n_before_ctx_lines ) {
         # save line for "before" context
         $before_context_buf[$before_context_pos] = $_;
         $before_context_pos = ($before_context_pos+1) % $n_before_ctx_lines;
@@ -1008,7 +1019,7 @@ sub main {
     my $nmatches    = 0;
     my $total_count = 0;
 
-    setup_line_context($opt);
+    setup_line_context( $opt );
 
 RESOURCES:
     while ( my $resource = $resources->next ) {
